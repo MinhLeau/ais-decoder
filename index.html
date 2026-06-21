@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIS Decoder</title>
+<style>
+  :root{
+    --bg:#0a1620;
+    --panel:#0f2230;
+    --panel-2:#12304a;
+    --line:#1d3f57;
+    --ink:#e8f1f6;
+    --ink-dim:#8fb0c2;
+    --accent:#36d6a0;     /* xanh radar */
+    --accent-2:#ffb454;   /* amber cảnh báo */
+    --danger:#ff6b6b;
+    --mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:var(--sans);
+    background:
+      radial-gradient(1200px 400px at 80% -10%, rgba(54,214,160,.08), transparent),
+      var(--bg);
+    color:var(--ink);
+    line-height:1.5;
+    padding:18px;
+  }
+  .wrap{max-width:960px;margin:0 auto}
+  header.top{
+    display:flex;align-items:center;gap:12px;margin-bottom:16px;
+    border-bottom:1px solid var(--line);padding-bottom:12px;
+  }
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  header.top h1{font-size:18px;margin:0;letter-spacing:.5px;font-weight:650}
+  header.top .sub{color:var(--ink-dim);font-size:13px;margin-left:auto}
+
+  label.fld{display:block;font-size:12px;color:var(--ink-dim);margin:0 0 6px;letter-spacing:.4px;text-transform:uppercase}
+  textarea{
+    width:100%;min-height:96px;resize:vertical;
+    background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);border-radius:10px;
+    font-family:var(--mono);font-size:14px;padding:12px;
+  }
+  textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(54,214,160,.15)}
+
+  .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0 4px}
+  button{
+    font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;
+    border:none;border-radius:9px;padding:10px 18px;
+  }
+  .btn-go{background:var(--accent);color:#04211a}
+  .btn-go:hover{filter:brightness(1.08)}
+  .btn-ghost{background:transparent;color:var(--ink-dim);border:1px solid var(--line)}
+  .btn-ghost:hover{color:var(--ink);border-color:var(--ink-dim)}
+  .samples{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+  .samples button{font-size:12px;padding:6px 11px;background:var(--panel-2);color:var(--ink-dim)}
+  .samples button:hover{color:var(--ink)}
+
+  #out{margin-top:18px;display:none}
+  .msg-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    overflow:hidden;margin-bottom:14px;
+  }
+  .msg-head{
+    display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+    padding:11px 14px;background:var(--panel-2);border-bottom:1px solid var(--line);
+  }
+  .msg-head .type{font-weight:700;color:var(--accent)}
+  .msg-head .desc{color:var(--ink-dim);font-size:13px}
+  .msg-head .mmsi{margin-left:auto;font-family:var(--mono);font-size:13px}
+  table.fields{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.fields td{padding:8px 14px;border-bottom:1px solid rgba(29,63,87,.5);vertical-align:top}
+  table.fields tr:last-child td{border-bottom:none}
+  table.fields td.k{color:var(--ink-dim);width:42%;white-space:nowrap}
+  table.fields td.v{font-family:var(--mono);color:var(--ink)}
+  table.fields td.v a{color:var(--accent)}
+  .err{
+    background:rgba(255,107,107,.08);border:1px solid var(--danger);
+    color:#ffd2d2;border-radius:10px;padding:12px 14px;font-size:13.5px;
+  }
+  .raw-note{color:var(--ink-dim);font-size:12px;margin-top:6px;font-family:var(--mono);word-break:break-all}
+  footer{color:var(--ink-dim);font-size:12px;margin-top:24px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <span class="dot"></span>
+    <h1>AIS DECODER</h1>
+    <span class="sub">AIVDM / AIVDO · giải mã phía trình duyệt</span>
+  </header>
+
+  <label class="fld" for="raw">Dán đoạn RAW AIS (mỗi câu một dòng — bản tin nhiều mảnh dán đủ các dòng)</label>
+  <textarea id="raw" spellcheck="false" placeholder="!AIVDM,1,1,,A,15M67FC000G?ufbE`FepT8c@00B`,0*40"></textarea>
+
+  <div class="controls">
+    <button class="btn-go" onclick="decodeAll()">Decode</button>
+    <button class="btn-ghost" onclick="clearAll()">Xóa</button>
+    <span class="samples">
+      <button onclick="loadSample(1)">Type 1</button>
+      <button onclick="loadSample(5)">Type 5</button>
+      <button onclick="loadSample(18)">Type 18</button>
+      <button onclick="loadSample(21)">AtoN</button>
+    </span>
+  </div>
+
+  <div id="out"></div>
+
+  <footer>Chạy hoàn toàn client-side — không gửi dữ liệu đi đâu cả.</footer>
+</div>
+
+<script>
+/* ---------- Bảng tra cứu ---------- */
+const SIXBIT = "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_ !\"#$%&'()*+,-./0123456789:;<=>?";
+
+const NAV_STATUS = ["Under way using engine","At anchor","Not under command","Restricted manoeuvrability",
+  "Constrained by draught","Moored","Aground","Engaged in fishing","Under way sailing",
+  "Reserved (HSC)","Reserved (WIG)","Power-driven towing astern","Power-driven pushing ahead",
+  "Reserved","AIS-SART/MOB/EPIRB","Undefined"];
+
+const EPFD = {0:"Undefined",1:"GPS",2:"GLONASS",3:"Combined GPS/GLONASS",4:"Loran-C",5:"Chayka",
+  6:"Integrated nav system",7:"Surveyed",8:"Galileo",15:"Internal GNSS"};
+
+const ATON_TYPE = {0:"Default",1:"Reference point",2:"RACON",3:"Fixed structure off-shore",
+  5:"Light w/o sectors",6:"Light w/ sectors",7:"Leading light front",8:"Leading light rear",
+  9:"Beacon, cardinal N",10:"Beacon, cardinal E",11:"Beacon, cardinal S",12:"Beacon, cardinal W",
+  13:"Beacon, port hand",14:"Beacon, starboard hand",15:"Beacon, pref. channel port",
+  16:"Beacon, pref. channel stbd",17:"Beacon, isolated danger",18:"Beacon, safe water",
+  19:"Beacon, special mark",20:"Cardinal mark N",21:"Cardinal mark E",22:"Cardinal mark S",
+  23:"Cardinal mark W",24:"Port hand mark",25:"Starboard hand mark",26:"Pref. channel port",
+  27:"Pref. channel stbd",28:"Isolated danger",29:"Safe water",30:"Special mark",
+  31:"Light vessel/LANBY/rig"};
+
+function shipType(t){
+  if(t===0) return "Not available";
+  const cat={2:"WIG",3:"Special",4:"HSC",6:"Passenger",7:"Cargo",8:"Tanker"};
+  if(t>=20&&t<=29) return "WIG ("+t+")";
+  if(t===30) return "Fishing";
+  if(t===31||t===32) return "Towing";
+  if(t===33) return "Dredging/underwater ops";
+  if(t===34) return "Diving ops";
+  if(t===35) return "Military ops";
+  if(t===36) return "Sailing";
+  if(t===37) return "Pleasure craft";
+  if(t>=40&&t<=49) return "High-speed craft ("+t+")";
+  if(t===50) return "Pilot vessel";
+  if(t===51) return "Search and rescue";
+  if(t===52) return "Tug";
+  if(t===53) return "Port tender";
+  if(t===54) return "Anti-pollution";
+  if(t===55) return "Law enforcement";
+  if(t===58) return "Medical transport";
+  if(t>=60&&t<=69) return "Passenger ("+t+")";
+  if(t>=70&&t<=79) return "Cargo ("+t+")";
+  if(t>=80&&t<=89) return "Tanker ("+t+")";
+  if(t>=90&&t<=99) return "Other ("+t+")";
+  return "Type "+t;
+}
+
+/* ---------- Tách payload từ NMEA ---------- */
+function unarmor(payload, fillBits){
+  let bits = "";
+  for(const ch of payload){
+    let v = ch.charCodeAt(0) - 48;
+    if(v > 40) v -= 8;
+    if(v < 0 || v > 63) throw new Error("Ký tự payload không hợp lệ: '"+ch+"'");
+    bits += v.toString(2).padStart(6,"0");
+  }
+  if(fillBits>0) bits = bits.slice(0, bits.length - fillBits);
+  return bits;
+}
+
+/* ---------- Đọc trường bit ---------- */
+function U(bits,start,len){ return parseInt(bits.substr(start,len)||"0",2)||0; }
+function I(bits,start,len){
+  let v = U(bits,start,len);
+  if(v >= (1<<(len-1)) && len<32) v -= (1<<len);
+  else if(len>=32){ /* không dùng cho AIS thường */ }
+  return v;
+}
+function T(bits,start,len){
+  let s="";
+  for(let i=0;i+6<=len;i+=6){
+    const c = U(bits,start+i,6);
+    s += SIXBIT[c];
+  }
+  return s.replace(/@+$/,"").replace(/\s+$/,"").trim();
+}
+function coord(raw, divisor){ return raw/divisor; }
+function fmtLat(v){ return (v>90||v<-90)?"không khả dụng":v.toFixed(6)+"°"; }
+function fmtLon(v){ return (v>180||v<-180)?"không khả dụng":v.toFixed(6)+"°"; }
+
+/* ---------- Giải mã theo loại ---------- */
+function decodePayload(bits){
+  const type = U(bits,0,6);
+  const f = { _type:type, _desc:"", _mmsi:U(bits,8,30), rows:[] };
+  const add=(k,v)=>f.rows.push([k,v]);
+
+  add("Repeat indicator", U(bits,6,2));
+
+  if(type>=1 && type<=3){
+    f._desc = "Position Report (Class A)";
+    const st = U(bits,38,4);
+    add("Navigation status", st+" — "+(NAV_STATUS[st]||"?"));
+    const rot=I(bits,42,8);
+    add("Rate of turn", rot===-128?"không khả dụng":rot+" (raw)");
+    const sog=U(bits,50,10);
+    add("SOG", sog===1023?"không khả dụng":(sog/10).toFixed(1)+" kn");
+    add("Position accuracy", U(bits,60,1)?"High (<10m)":"Low (>10m)");
+    const lon=coord(I(bits,61,28),600000), lat=coord(I(bits,89,27),600000);
+    add("Longitude", fmtLon(lon)); add("Latitude", fmtLat(lat));
+    mapLink(add,lat,lon);
+    const cog=U(bits,116,12);
+    add("COG", cog===3600?"không khả dụng":(cog/10).toFixed(1)+"°");
+    const hdg=U(bits,128,9);
+    add("True heading", hdg===511?"không khả dụng":hdg+"°");
+    add("Timestamp (UTC sec)", U(bits,137,6));
+  }
+  else if(type===4 || type===11){
+    f._desc = type===4?"Base Station Report":"UTC/Date Response";
+    add("UTC", U(bits,38,14)+"-"+U(bits,52,4)+"-"+U(bits,56,5)+" "+
+      String(U(bits,61,5)).padStart(2,"0")+":"+String(U(bits,66,6)).padStart(2,"0")+":"+
+      String(U(bits,72,6)).padStart(2,"0"));
+    add("Position accuracy", U(bits,78,1)?"High":"Low");
+    const lon=coord(I(bits,79,28),600000), lat=coord(I(bits,107,27),600000);
+    add("Longitude", fmtLon(lon)); add("Latitude", fmtLat(lat));
+    mapLink(add,lat,lon);
+    add("EPFD type", EPFD[U(bits,134,4)]||U(bits,134,4));
+  }
+  else if(type===5){
+    f._desc = "Static and Voyage Related Data";
+    add("AIS version", U(bits,38,2));
+    add("IMO number", U(bits,40,30));
+    add("Call sign", T(bits,70,42)||"—");
+    add("Vessel name", T(bits,112,120)||"—");
+    add("Ship type", U(bits,232,8)+" — "+shipType(U(bits,232,8)));
+    const a=U(bits,240,9),b=U(bits,249,9),c=U(bits,258,6),d=U(bits,264,6);
+    add("Dimensions (m)", "bow "+a+" / stern "+b+" / port "+c+" / stbd "+d+"  →  L="+(a+b)+" × W="+(c+d));
+    add("EPFD type", EPFD[U(bits,270,4)]||U(bits,270,4));
+    add("ETA (UTC)", String(U(bits,274,4)).padStart(2,"0")+"-"+String(U(bits,278,5)).padStart(2,"0")+" "+
+      String(U(bits,283,5)).padStart(2,"0")+":"+String(U(bits,288,6)).padStart(2,"0"));
+    add("Draught (m)", (U(bits,294,8)/10).toFixed(1));
+    add("Destination", T(bits,302,120)||"—");
+  }
+  else if(type===18){
+    f._desc = "Position Report (Class B)";
+    const sog=U(bits,46,10);
+    add("SOG", sog===1023?"không khả dụng":(sog/10).toFixed(1)+" kn");
+    add("Position accuracy", U(bits,56,1)?"High":"Low");
+    const lon=coord(I(bits,57,28),600000), lat=coord(I(bits,85,27),600000);
+    add("Longitude", fmtLon(lon)); add("Latitude", fmtLat(lat));
+    mapLink(add,lat,lon);
+    const cog=U(bits,124,12);
+    add("COG", cog===3600?"không khả dụng":(cog/10).toFixed(1)+"°");
+    const hdg=U(bits,136,9);
+    add("True heading", hdg===511?"không khả dụng":hdg+"°");
+    add("Timestamp (UTC sec)", U(bits,148,6));
+  }
+  else if(type===19){
+    f._desc = "Extended Class B Position Report";
+    const sog=U(bits,46,10);
+    add("SOG", sog===1023?"không khả dụng":(sog/10).toFixed(1)+" kn");
+    const lon=coord(I(bits,57,28),600000), lat=coord(I(bits,85,27),600000);
+    add("Longitude", fmtLon(lon)); add("Latitude", fmtLat(lat));
+    mapLink(add,lat,lon);
+    const cog=U(bits,124,12);
+    add("COG", cog===3600?"không khả dụng":(cog/10).toFixed(1)+"°");
+    add("Vessel name", T(bits,143,120)||"—");
+    add("Ship type", U(bits,263,8)+" — "+shipType(U(bits,263,8)));
+  }
+  else if(type===21){
+    f._desc = "Aid-to-Navigation (AtoN) Report";
+    add("AtoN type", U(bits,38,5)+" — "+(ATON_TYPE[U(bits,38,5)]||"?"));
+    let name = T(bits,43,120);
+    // tên mở rộng (bit 272+), độ dài thay đổi
+    if(bits.length>272) name += T(bits,272,bits.length-272);
+    add("Name", name||"—");
+    add("Position accuracy", U(bits,163,1)?"High":"Low");
+    const lon=coord(I(bits,164,28),600000), lat=coord(I(bits,192,27),600000);
+    add("Longitude", fmtLon(lon)); add("Latitude", fmtLat(lat));
+    mapLink(add,lat,lon);
+    add("Off-position", U(bits,259,1)?"Yes":"No");
+    add("Virtual AtoN", U(bits,269,1)?"Yes (ảo)":"No (thật)");
+  }
+  else if(type===24){
+    const part = U(bits,38,2);
+    f._desc = "Static Data Report (Part "+(part===0?"A":"B")+")";
+    if(part===0){
+      add("Vessel name", T(bits,40,120)||"—");
+    }else{
+      add("Ship type", U(bits,40,8)+" — "+shipType(U(bits,40,8)));
+      add("Vendor ID", T(bits,48,42)||"—");
+      add("Call sign", T(bits,90,42)||"—");
+      const a=U(bits,132,9),b=U(bits,141,9),c=U(bits,150,6),d=U(bits,156,6);
+      add("Dimensions (m)", "bow "+a+" / stern "+b+" / port "+c+" / stbd "+d);
+    }
+  }
+  else{
+    f._desc = "Message type "+type+" — chưa hỗ trợ chi tiết";
+    add("Raw bit length", bits.length);
+  }
+  return f;
+}
+
+function mapLink(add,lat,lon){
+  if(lat>90||lat<-90||lon>180||lon<-180) return;
+  const url="https://www.openstreetmap.org/?mlat="+lat+"&mlon="+lon+"&zoom=12";
+  add("Bản đồ", '<a href="'+url+'" target="_blank" rel="noopener">Mở OpenStreetMap ↗</a>');
+}
+
+/* ---------- Ghép mảnh & xử lý nhiều dòng ---------- */
+function parseLines(text){
+  const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const results = [];
+  const buffer = {}; // gom mảnh theo seqId
+
+  for(const line of lines){
+    try{
+      const body = line.replace(/^[!$]/,"").split("*")[0];
+      const p = body.split(",");
+      if(p.length<6) throw new Error("Không phải câu AIVDM/AIVDO hợp lệ");
+      const fragCount=+p[1], fragNum=+p[2], seq=p[3], chan=p[4], payload=p[5];
+      const fill=+(p[6]!==undefined?p[6]:0);
+
+      if(fragCount===1){
+        const bits=unarmor(payload,fill);
+        results.push({ok:true, line, bits, chan, frags:1});
+      }else{
+        const key = seq+"_"+chan+"_"+fragCount;
+        buffer[key]=buffer[key]||{parts:[],fill:0,raw:[]};
+        buffer[key].parts[fragNum-1]=payload;
+        buffer[key].raw.push(line);
+        if(fragNum===fragCount) buffer[key].fill=fill;
+        const full = buffer[key].parts.filter(Boolean).length===fragCount;
+        if(full){
+          const joined = buffer[key].parts.join("");
+          const bits = unarmor(joined, buffer[key].fill);
+          results.push({ok:true, line:buffer[key].raw.join("\n"), bits, chan, frags:fragCount});
+          delete buffer[key];
+        }
+      }
+    }catch(e){
+      results.push({ok:false, line, err:e.message});
+    }
+  }
+  // mảnh thiếu
+  for(const k in buffer){
+    results.push({ok:false, line:buffer[k].raw.join("\n"), err:"Bản tin nhiều mảnh chưa đủ — thiếu mảnh."});
+  }
+  return results;
+}
+
+/* ---------- Render ---------- */
+function decodeAll(){
+  const out=document.getElementById("out");
+  const text=document.getElementById("raw").value;
+  out.style.display="block";
+  out.innerHTML="";
+  if(!text.trim()){ out.innerHTML='<div class="err">Chưa có dữ liệu để giải mã.</div>'; return; }
+
+  const items=parseLines(text);
+  for(const it of items){
+    if(!it.ok){
+      out.insertAdjacentHTML("beforeend",
+        '<div class="err"><b>Lỗi:</b> '+esc(it.err)+'<div class="raw-note">'+esc(it.line)+'</div></div>');
+      continue;
+    }
+    let f;
+    try{ f=decodePayload(it.bits); }
+    catch(e){
+      out.insertAdjacentHTML("beforeend",'<div class="err"><b>Lỗi giải mã:</b> '+esc(e.message)+'</div>');
+      continue;
+    }
+    let rows="";
+    for(const [k,v] of f.rows){
+      rows+='<tr><td class="k">'+esc(k)+'</td><td class="v">'+v+'</td></tr>';
+    }
+    out.insertAdjacentHTML("beforeend",
+      '<div class="msg-card">'+
+        '<div class="msg-head">'+
+          '<span class="type">Type '+f._type+'</span>'+
+          '<span class="desc">'+esc(f._desc)+'</span>'+
+          '<span class="mmsi">MMSI '+f._mmsi+(it.chan?' · ch '+esc(it.chan):'')+'</span>'+
+        '</div>'+
+        '<table class="fields">'+rows+'</table>'+
+      '</div>');
+  }
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function clearAll(){ document.getElementById("raw").value=""; document.getElementById("out").style.display="none"; }
+
+const SAMPLES={
+  1:"!AIVDM,1,1,,A,15M67FC000G?ufbE`FepT8c@00B`,0*40",
+  5:"!AIVDM,2,1,1,A,55?MbV02;H;s<HtKR20EHE:0@T4@Dn2222222216L961O5Gf0NSQEp6ClRp8,0*1C\n!AIVDM,2,2,1,A,88888888880,2*25",
+  18:"!AIVDM,1,1,,A,B5NWV1P0<vSE=I3Qdh4o`?w<2HE:,0*46",
+  21:"!AIVDM,1,1,,B,E>jHC3@`0`bQ@0220T2222222222031Hn0;PT0000000000,4*55"
+};
+function loadSample(n){ document.getElementById("raw").value=SAMPLES[n]; decodeAll(); }
+</script>
+</body>
+</html>
