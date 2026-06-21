@@ -6,15 +6,15 @@
 <title>AIS Decoder</title>
 <style>
   :root{
-    --bg:#0a1620;
-    --panel:#0f2230;
-    --panel-2:#12304a;
-    --line:#1d3f57;
-    --ink:#e8f1f6;
-    --ink-dim:#8fb0c2;
-    --accent:#36d6a0;
-    --accent-2:#ffb454;
-    --danger:#ff6b6b;
+    --bg:#a3d1fb;
+    --panel:#ffffff;
+    --panel-2:#e9f3ff;
+    --line:#bcd6f1;
+    --ink:#0f2c47;
+    --ink-dim:#4a6b86;
+    --accent:#0d7d5c;
+    --accent-2:#e8821a;
+    --danger:#c0392b;
     --mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,Consolas,monospace;
     --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   }
@@ -22,9 +22,7 @@
   html,body{margin:0;padding:0}
   body{
     font-family:var(--sans);
-    background:
-      radial-gradient(1200px 400px at 80% -10%, rgba(54,214,160,.08), transparent),
-      var(--bg);
+    background:var(--bg);
     color:var(--ink);line-height:1.5;padding:18px;
   }
   .wrap{max-width:960px;margin:0 auto}
@@ -32,42 +30,42 @@
     display:flex;align-items:center;gap:12px;margin-bottom:16px;
     border-bottom:1px solid var(--line);padding-bottom:12px;
   }
-  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px rgba(13,125,92,.5)}
   header.top h1{font-size:18px;margin:0;letter-spacing:.5px;font-weight:650}
   header.top .sub{color:var(--ink-dim);font-size:13px;margin-left:auto}
 
-  label.fld{display:block;font-size:12px;color:var(--ink-dim);margin:0 0 6px;letter-spacing:.4px;text-transform:uppercase}
+  label.fld{display:block;font-size:12px;color:var(--ink);margin:0 0 6px;letter-spacing:.4px;text-transform:uppercase;font-weight:600}
   textarea{
     width:100%;min-height:96px;resize:vertical;
     background:var(--panel);color:var(--ink);
     border:1px solid var(--line);border-radius:10px;
     font-family:var(--mono);font-size:14px;padding:12px;
   }
-  textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(54,214,160,.15)}
+  textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(13,125,92,.18)}
 
   .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0 4px}
   button{font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;border:none;border-radius:9px;padding:10px 18px}
-  .btn-go{background:var(--accent);color:#04211a}
+  .btn-go{background:var(--accent);color:#fff}
   .btn-go:hover{filter:brightness(1.08)}
-  .btn-ghost{background:transparent;color:var(--ink-dim);border:1px solid var(--line)}
+  .btn-ghost{background:#fff;color:var(--ink-dim);border:1px solid var(--line)}
   .btn-ghost:hover{color:var(--ink);border-color:var(--ink-dim)}
 
   #out{margin-top:18px;display:none}
-  .msg-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px}
+  .msg-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px;box-shadow:0 2px 8px rgba(15,44,71,.08)}
   .msg-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:11px 14px;background:var(--panel-2);border-bottom:1px solid var(--line)}
   .msg-head .type{font-weight:700;color:var(--accent)}
   .msg-head .desc{color:var(--ink-dim);font-size:13px}
   .msg-head .chan{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--ink-dim)}
-  .badge{font-size:11px;font-weight:700;color:#3a2500;background:var(--accent-2);border-radius:5px;padding:2px 7px;letter-spacing:.3px}
+  .badge{font-size:11px;font-weight:700;color:#fff;background:var(--accent-2);border-radius:5px;padding:2px 7px;letter-spacing:.3px}
   table.fields{width:100%;border-collapse:collapse;font-size:13.5px}
-  table.fields td{padding:8px 14px;border-bottom:1px solid rgba(29,63,87,.5);vertical-align:top}
+  table.fields td{padding:8px 14px;border-bottom:1px solid #eaf1f8;vertical-align:top}
   table.fields tr:last-child td{border-bottom:none}
   table.fields td.k{color:var(--ink-dim);width:42%;white-space:nowrap}
   table.fields td.v{font-family:var(--mono);color:var(--ink)}
   table.fields td.v a{color:var(--accent)}
-  table.fields tr.mmsi-row td{background:rgba(54,214,160,.06)}
+  table.fields tr.mmsi-row td{background:rgba(13,125,92,.07)}
   table.fields tr.mmsi-row td.v{color:var(--accent);font-weight:600}
-  .err{background:rgba(255,107,107,.08);border:1px solid var(--danger);color:#ffd2d2;border-radius:10px;padding:12px 14px;font-size:13.5px;margin-bottom:14px}
+  .err{background:#fdecea;border:1px solid var(--danger);color:#7a241b;border-radius:10px;padding:12px 14px;font-size:13.5px;margin-bottom:14px}
   .raw-note{color:var(--ink-dim);font-size:12px;margin-top:6px;font-family:var(--mono);word-break:break-all}
   footer{color:var(--ink-dim);font-size:12px;margin-top:24px;text-align:center}
 </style>
