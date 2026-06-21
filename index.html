@@ -190,6 +190,7 @@ function decodePayload(bits){
   const f = { _type:type, _desc:"", _mmsi:mmsi, rows:[] };
   const add=(k,v)=>f.rows.push([k,v]);
 
+  add("Message ID", type);
   add("Repeat indicator", U(bits,6,2));
   add("__MMSI__", mmsi);   // marker row, rendered specially & placed above the type fields
 
@@ -233,11 +234,12 @@ function decodePayload(bits){
     const a=U(bits,240,9),b=U(bits,249,9),c=U(bits,258,6),d=U(bits,264,6);
     add("Dimensions (m)", a===null?TRUNC:("bow "+a+" / stern "+b+" / port "+c+" / stbd "+d+"  \u2192  L="+(a+b)+" \u00D7 W="+(c+d)));
     add("EPFD type", U(bits,270,4)===null?TRUNC:(EPFD[U(bits,270,4)]||U(bits,270,4)));
-    if(full(bits,294,8)){
-      add("ETA (UTC)", String(U(bits,274,4)).padStart(2,"0")+"-"+String(U(bits,278,5)).padStart(2,"0")+" "+
-        String(U(bits,283,5)).padStart(2,"0")+":"+String(U(bits,288,6)).padStart(2,"0"));
-      add("Draught (m)", (U(bits,294,8)/10).toFixed(1));
-    }else{ add("ETA / Draught", TRUNC); }
+    const em=U(bits,274,4), ed=U(bits,278,5), eh=U(bits,283,5), emin=U(bits,288,6);
+    add("ETA Month",  em===null?TRUNC:(em===0?"not available":em));
+    add("ETA Day",    ed===null?TRUNC:(ed===0?"not available":ed));
+    add("ETA Hour",   eh===null?TRUNC:(eh===24?"not available":eh));
+    add("ETA Minute", emin===null?TRUNC:(emin===60?"not available":emin));
+    add("Draught (m)", full(bits,294,8)?(U(bits,294,8)/10).toFixed(1):TRUNC);
     add("Destination", full(bits,302,120)?(T(bits,302,120)||"\u2014"):TRUNC);
   }
   else if(type===18){
